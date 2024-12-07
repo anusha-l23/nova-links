@@ -263,7 +263,7 @@ eventCategory?.slug === "senthil-marathon-2024" ?
 )}
 
 
-const CustomerInfo = ({runnerClub, formik, eventCategory, categoryNames, categoryMinimumAge, customSlug, isMatched, matchedAgeBracket }) => {  
+const CustomerInfo = ({verificationData, isEmailVerificationEnabled, isSmsVerificationEnabled, runnerClub, formik, eventCategory, categoryNames, categoryMinimumAge, customSlug, isMatched, matchedAgeBracket }) => {  
   const [showTermsPopover, setShowTermsPopover] = useState(false);
   const [showAdditionalTermsPopover, setShowAdditionalTermsPopover] = useState(false);
   const [show, setShow] = useState(false);
@@ -286,18 +286,20 @@ const CustomerInfo = ({runnerClub, formik, eventCategory, categoryNames, categor
     textDecoration: isHovered ? 'underline' : '',
   };
   const [users, setUsers] = useState([]);
-  useEffect(() => {
-    const fetchRegistrations = async () => {
-      try {
-        const response = await axios.get(
-          `${baseUrl}users/users?eventId=${eventCategory?.id}&orderStatus='COMPLETED'`);
-          setUsers(response.data);
+  const fetchRegistrations = async () => {
+    try {
+      const response = await axios.get(
+        `${baseUrl}users/users?eventId=${eventCategory?.id}&orderStatus='COMPLETED'`);
+        setUsers(response.data);
 
-    } catch (error) {
-      console.error(error);
-    }
-  };
+  } catch (error) {
+    console.error(error);
+  }
+};
+  useEffect(() => {
+if(eventCategory){
     fetchRegistrations();
+}
   }, [eventCategory]);
   const calculateAge = useMemo(() => {
     return (dateOfBirth) => {
@@ -384,21 +386,63 @@ const CustomerInfo = ({runnerClub, formik, eventCategory, categoryNames, categor
 // useEffect(()=>{
 // fetchData();
 // },[])
+console.log(verificationData, "verifivcationData")
+// useEffect(() => {
+//   if(isEmailVerificationEnabled && verificationData?.email){
+//     formik.setFieldValue('email',verificationData.email);
+//   }
+//   if(isSmsVerificationEnabled && verificationData?.phoneNumber){
+//     formik.setFieldValue('mobileNumber',verificationData?.phoneNumber);
+//   }
+//   if (formik.values.mobileNumber !== '' && !formik.touched.mobileNumber) {
+//     formik.setFieldTouched('mobileNumber', true);
+//   }
+//   if (formik.values.contactNumber !== '' && !formik.touched.contactNumber) {
+//     formik.setFieldTouched('contactNumber', true);
+//   }
+//   if (formik.values.dateOfBirth !== '' && !formik.touched.dateOfBirth) {
+//     formik.setFieldTouched('dateOfBirth', true);
+//   }
+//   if (formik.values.gender !== '' && !formik.touched.gender) {
+//     formik.setFieldTouched('gender', true);
+//   }
+//   formik.validateForm();
+// }, [isEmailVerificationEnabled, isSmsVerificationEnabled, formik.values.mobileNumber, formik.values.contactNumber, formik.values.dateOfBirth, formik.values.gender]);
+
 useEffect(() => {
-  if (formik.values.mobileNumber !== '' && !formik.touched.mobileNumber) {
-    formik.setFieldTouched('mobileNumber', true);
+  if (isEmailVerificationEnabled && verificationData?.email && formik.values.email !== verificationData.email) {
+    formik.setFieldValue('email', verificationData.email);
   }
-  if (formik.values.contactNumber !== '' && !formik.touched.contactNumber) {
-    formik.setFieldTouched('contactNumber', true);
+
+  if (isSmsVerificationEnabled && verificationData?.phoneNumber && formik.values.mobileNumber !== verificationData.phoneNumber) {
+    formik.setFieldValue('mobileNumber', verificationData?.phoneNumber);
   }
-  if (formik.values.dateOfBirth !== '' && !formik.touched.dateOfBirth) {
-    formik.setFieldTouched('dateOfBirth', true);
-  }
-  if (formik.values.gender !== '' && !formik.touched.gender) {
-    formik.setFieldTouched('gender', true);
-  }
-  formik.validateForm();
-}, [formik.values.mobileNumber, formik.values.contactNumber, formik.values.dateOfBirth, formik.values.gender]);
+
+  // Set fields as touched only if not already touched
+  ['mobileNumber', 'contactNumber', 'dateOfBirth', 'gender'].forEach((field) => {
+    if (formik.values[field] !== '' && !formik.touched[field]) {
+      formik.setFieldTouched(field, true);
+    }
+  });
+
+  // Delay form validation to avoid triggering on every render
+  const timer = setTimeout(() => {
+    formik.validateForm();
+  }, 200);
+
+  // Cleanup to clear the timer if the effect reruns
+  return () => clearTimeout(timer);
+}, [
+  isEmailVerificationEnabled,
+  isSmsVerificationEnabled,
+  verificationData,
+  formik.values.email,
+  formik.values.mobileNumber,
+  formik.values.contactNumber,
+  formik.values.dateOfBirth,
+  formik.values.gender,
+]);
+
 
 const [showOthersField, setShowOthersField] = useState(false);
 
@@ -542,13 +586,13 @@ const [hoverCategory, setHoveredCategory] = useState(null)
                 )}
                   </div>
             </div>
-
             <div className={`form-group form-input row m-2 ${formik.touched.dateOfBirth && formik.errors.dateOfBirth ? "errorStyle" : ''}`}>
-              <label className="text-16 fw-bold col-sm-4">Date of Birth <span className='text-danger'>*</span></label>
+              <label className="text-16 text-dark-1 fw-bold col-sm-4">Date of Birth <span className='text-danger'>*</span></label>
               <div className='col-sm-8'>
-              <DatePicker
-                inputClass=""
-                containerClassName="custom_container-picker"
+              <div className="form-control" style={{backgroundColor: !formik.values.categoryName ? "#e9ecef" : "",}}>
+            <DatePicker
+                inputClassName=""
+                containerClassName=""
                 value={
                   formik.values.dateOfBirth
                     ? new Date(formik.values.dateOfBirth)
@@ -559,11 +603,15 @@ const [hoverCategory, setHoveredCategory] = useState(null)
                 id="dateOfBirth"
                 name="dateOfBirth"
                 format="DD/MM/YYYY"
-                style={{
-                  border: formik.touched.dateOfBirth && formik.errors.dateOfBirth && "1px solid #dc2626",
-                  backgroundColor: formik.touched.dateOfBirth && formik.errors.dateOfBirth && "#ffffff"
-                 }}
+                   className="datepicker-no-outline"
+                   style={{
+                    border: "none",
+                    outline: "none",
+                    boxShadow: "none",
+                    width: "100%",
+                  }}
               />
+              </div> 
               {formik.touched.dateOfBirth && formik.errors.dateOfBirth && (
                 <div className="text-danger">{formik.errors.dateOfBirth}</div>
               )}              
@@ -828,14 +876,16 @@ const [hoverCategory, setHoveredCategory] = useState(null)
                 onChange={(e) => formik.handleChange(e)}
                 onBlur={formik.handleBlur}
                 value={formik.values.email || ""}
-                disabled={!formik.values.categoryName}
+                disabled={isEmailVerificationEnabled || !formik.values.categoryName}
                 style={{
                   border: formik.touched.email && formik.errors.email && "1px solid #dc2626",
                   backgroundColor: formik.touched.email && formik.errors.email && "#ffffff"
                  }}
               />
 
-              
+{isEmailVerificationEnabled ? ( <span className="ms-2 text-success" title="Email Verified">
+              Verified
+            </span>):null} 
 
             {formik.touched.email && formik.errors.email && (
               <div className="text-danger">{formik.errors.email}</div>
@@ -854,19 +904,65 @@ const [hoverCategory, setHoveredCategory] = useState(null)
                 onChange={(e) => formik.handleChange(e)}
                 onBlur={formik.handleBlur}
                 value={formik.values.mobileNumber || ""}
-                disabled={!formik.values.categoryName}
+                disabled={isSmsVerificationEnabled || !formik.values.categoryName}
                 autoComplete="tel"
                 style={{
                   border: formik.touched.mobileNumber && formik.errors.mobileNumber && "1px solid #dc2626",
                   backgroundColor: formik.touched.mobileNumber && formik.errors.mobileNumber && "#ffffff"
                  }}
               />
+               {isSmsVerificationEnabled ? ( <span className="ms-2 text-success" title="phoneNumber Verified">
+              Verified
+            </span>):null} 
             {formik.touched.mobileNumber && formik.errors.mobileNumber && (
               <div className="text-danger">{formik.errors.mobileNumber}</div>
             )}
             </div>
           </div>
+          <div className="row x-gap-20 y-gap-20 pt-10">
+<div className="col-md-6">
+         <div className="form-check">
+  <input className="form-check-input" type="checkbox"
+                  name="enableWhatsApp"
+                  checked={formik.values.enableWhatsApp}
+                  onChange={(e) => formik.setFieldValue("enableWhatsApp", e.target.checked)}
+                  onBlur={formik.handleBlur}
+                  disabled={!formik.values.categoryName}
+                  required
+                />
 
+<label className="text-black" for="flexCheckChecked">
+              Do you have a separate number for WhatsApp?
+              </label>
+              </div>
+            
+</div>
+</div>
+{formik.values.enableWhatsApp &&
+          <div className={`form-input form-group row m-2 ${formik.touched.whatsAppNumber && formik.errors.whatsAppNumber ? "errorStyle" : ''}`}>
+            <label className="text-16 fw-bold col-sm-4">WhatsApp Number <span className='text-danger'>*</span></label>
+              <div className='col-sm-8'>
+              <input
+                type="text" 
+                className='form-control' 
+                id="whatsAppNumber"
+                name="whatsAppNumber"
+                onChange={(e) => formik.handleChange(e)}
+                onBlur={formik.handleBlur}
+                value={ formik?.values?.enableWhatsApp ? formik?.values?.whatsAppNumber : formik?.values?.mobileNumber }
+                disabled={!formik.values.categoryName}
+                autoComplete="tel"
+                style={{
+                  border: formik.touched.whatsAppNumber && formik.errors.whatsAppNumber && "1px solid #dc2626",
+                  backgroundColor: formik.touched.whatsAppNumber && formik.errors.whatsAppNumber && "#ffffff"
+                 }}
+              />
+            {formik.touched.whatsAppNumber && formik.errors.whatsAppNumber && (
+              <div className="text-danger">{formik.errors.whatsAppNumber}</div>
+            )}
+            </div>
+          </div>
+}
 
 <p className="fw-bold mt-3">{eventCategory?.slug === "racing-kids-2024" ? "ADDITIONAL" : "EMERGENCY"} CONTACT</p>
           <div className={`form-input form-group row m-2 ${formik.touched.contactName && formik.errors.contactName ? "errorStyle" : ''}`}> 
@@ -986,38 +1082,8 @@ const [hoverCategory, setHoveredCategory] = useState(null)
 <div className='mt-3'>
 <span className="text-danger">*</span> Indicates mandatory fields
 </div>
-{/* <div className="row x-gap-20 y-gap-20 pt-10">
-<div className="col-md-6">
-
-            <div className="d-flex gap-2">
-              <div className="form-checkbox">
-                <input
-                  type="checkbox"
-                  name="acceptedTerms"
-                  checked={formik.values.acceptedTerms}
-                  onChange={(e) => formik.setFieldValue("acceptedTerms", e.target.checked)}
-                  onBlur={formik.handleBlur}
-                  disabled={!formik.values.categoryName}
-                  required
-                />
-
-                <div className="form-checkbox__mark">
-                  <div className="form-checkbox__icon icon-check" />
-                </div>
-              </div>
-              <div className="text-15 lh-15 ml-10">
-              I have read and agree to the {" "}
-          <span
-          style={{cursor:"pointer", textDecoration:"underline"}}
-            className="terms-link"
-            onClick={() => setShowTermsPopover(true)}
-          >
-            terms and conditions
-          </span>
-              </div>
-            </div> */}
-            <div class="form-check">
-  <input class="form-check-input" type="checkbox"
+            <div className="form-check">
+  <input className="form-check-input" type="checkbox"
                   name="acceptedTerms"
                   checked={formik.values.acceptedTerms}
                   onChange={(e) => formik.setFieldValue("acceptedTerms", e.target.checked)}
@@ -1025,7 +1091,7 @@ const [hoverCategory, setHoveredCategory] = useState(null)
                   disabled={!formik.values.categoryName}
                   required
                    id="flexCheckChecked"/>
-  <label class="form-check-label" for="flexCheckChecked">
+  <label className="form-check-label" for="flexCheckChecked">
   I have read and agree to the {" "}
           <span
           style={{cursor:"pointer", textDecoration:"underline"}}

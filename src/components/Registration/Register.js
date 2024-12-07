@@ -10,16 +10,13 @@ import {Toast} from "react-bootstrap";
 import CustomerInfo from "./CustomerInfo";
 import { getEvents } from "../../api/events";
 import * as Yup from "yup";
-const Register = () => {
+const Register = ({event, runnerClub, verificationData,isEmailVerificationEnabled,isSmsVerificationEnabled}) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [formValues, setFormValues] = useState(null);
 const location = useLocation();
   const [isSubmittingForm, setIsSubmittingForm] = useState(false);
 
   const {randomString} = useParams();
-  const [events, setEvents] = useState([]);
-  const [eventsLoading, setEventsLoading] = useState(false);
-  const [eventsError, setEventsError] = useState("");
   const [regsitrationUrl, setRegistrationUrl] = useState("")
   const [isLoading, setIsLoading] = useState(false);
   const [categoryNames, setCategoryNames] = useState([]);
@@ -32,57 +29,13 @@ const location = useLocation();
 
 useEffect(()=> {
 const fetchData = async()=>{
-const res = await axios.get(`${baseUrl}users/get-specialurl/${randomString}`)
+const res = await axios.get(`${baseUrl}users/get-specialurl?randomString=${randomString}`)
 setRegistrationUrl(res.data);
 }
 fetchData();
 },[randomString])
+console.log(regsitrationUrl, "regsitrationUrl")
 
-useEffect(() => {
-  const fetchData = async () => {
-    try {
-      setEventsError("");
-      setEventsLoading(true);
-      let allEvents = [];
-      let currentPage = 1;
-      const perPage = 10;
-      let totalEvents = 0;
-      const response = await getEvents({ page: currentPage, perPage });
-      const totalCountHeader = response.headers.get('x-total-count');
-      console.log('Total Count Header:', totalCountHeader);
-  
-      totalEvents = parseInt(totalCountHeader, 10);
-      const totalPages = Math.ceil(totalEvents / perPage);
-      console.log(`Total Pages to fetch: ${totalPages}`);
-
-      allEvents = response.data;
-      while (currentPage < totalPages) {
-        currentPage++;
-        const pageResponse = await getEvents({ page: currentPage, perPage });
-        allEvents = allEvents.concat(pageResponse.data);
-      }
-      setEvents(allEvents);
-    } catch (error) {
-      console.log("Error during fetching events", error);
-      setEventsError(error.message);
-    }
-    finally {
-      setEventsLoading(false);
-    }
-  }
-  fetchData();
-}, []);
-const [runnerClubData, setRunnerClubData] = useState([]);
-const fetchRunnerClub = async () => {
-  const response = await axios.get(`${baseUrl}users/getAllRunnerClub`);
-  setRunnerClubData(response.data)
-}
-useEffect(()=> {
-fetchRunnerClub();
-}, []);
-console.log(events, ":events")
-const event = events?.find(event=>event.id === regsitrationUrl?.eventId)
-const runnerClub = runnerClubData?.find(item=>item.id === regsitrationUrl?.runnerClubId);
 console.log(event, "event")
   useEffect(() => {
     const eventId = event ? event?.id : null;
@@ -124,13 +77,16 @@ console.log(event, "event")
       firstName: Yup.string().required("First Name is required"),
       lastName: Yup.string().required("Last Name is required"),
       categoryName: Yup.string().required("Category Name is required"),
-      email: Yup.string()
+      ...(isEmailVerificationEnabled?{}:{ 
+        email: Yup.string()
         .email("Invalid email")
-        .required("Email is required"),
-        mobileNumber: Yup.string()
-        .required("Mobile Number is required")
-        .matches(/^(?!0|(\+91))\d{10}$/, {
-          message: "Mobile Number should not start with 0 or +91 and should be 10 digits"
+        .required("Email is required")}),
+        ...(isSmsVerificationEnabled? {}:{
+          mobileNumber: Yup.string()
+          .required("Mobile Number is required")
+          .matches(/^(?!0|(\+91))\d{10}$/, {
+            message: "Mobile Number should not start with 0 or +91 and should be 10 digits"
+          })
         }),
         gender: Yup.string()
         .test(
@@ -236,6 +192,16 @@ medicalIssue: Yup.string(),
           })
           )
     }
+    if (formik?.values?.enableWhatsApp) {
+      schema = schema.concat(
+        Yup.object().shape({
+          whatsAppNumber: Yup.string().required("WhatsApp Number is required")
+          .matches(/^(?!0|(\+91))\d{10}$/, {
+            message: "whatsApp Number should not start with 0 or +91 and should be 10 digits"
+          }),
+          })
+          )
+    }
     return schema;
   });
 
@@ -264,6 +230,8 @@ medicalIssue: Yup.string(),
         additionalTermsAndConditions: formValues?.additionalTermsAndConditions || false,
         couponCode: formValues?.couponCode || "",
         addNewQuestion: formValues?.addNewQuestion || "",
+        enableWhatsApp: formValues?.enableWhatsApp || false,
+        whatsAppNumber: formValues?.whatsAppNumber || "",
       },
   validationSchema: validationSchema,
     onSubmit: async (values, {setSubmitting}) => {
@@ -272,7 +240,7 @@ medicalIssue: Yup.string(),
         setIsLoading(true);
         const age = calculateAge(values.dateOfBirth);
         values.dateOfBirth = `${values.dateOfBirth.getFullYear()}-${values.dateOfBirth.getMonth() + 1}-${values.dateOfBirth.getDate()}`
-        const response = await axios.post(`http://localhost:3001/api/users/runner-registration/${randomString}`, { ...values, age });   
+        const response = await axios.post(`http://localhost:3001/api/users/runner-registration/${randomString}`, { ...values, age, whatsAppNumber: values?.enableWhatsApp ? values?.whatsAppNumber : values?.mobileNumber });   
           const data = response.data;
 
             setToastVariant("success");
@@ -373,7 +341,10 @@ const renderSpinner = () => {
          customSlug={event?.slug}         
          matchedAgeBracket={matchedAgeBracket}     
          isMatched={isMatched}    
-         runnerClub={runnerClub}    
+         runnerClub={runnerClub}   
+         verificationData={verificationData}   
+         isEmailVerificationEnabled={isEmailVerificationEnabled}
+         isSmsVerificationEnabled={isSmsVerificationEnabled} 
          />
     },
   ];
@@ -386,19 +357,9 @@ const renderSpinner = () => {
   const nextStep = () => {
     if (formik.isValid) {
       formik.handleSubmit();
-      //setCurrentStep(currentStep +1)
     }
   };
-  const previousStep = () => {
-    if (currentStep > 0) {
-      setCurrentStep(currentStep - 1);
-    }
-  };
- 
 
-  const handleClickStep = (index) => {
-    setCurrentStep(index);
-  };
   useEffect(()=>{
     {isLoading && 
     window.scrollTo({ top: 0, behavior: "smooth" });
